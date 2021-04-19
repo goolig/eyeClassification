@@ -75,29 +75,33 @@ num_cols = len(feature_names)
 
 
 # convert an array of values into a dataset matrix
-def create_dataset(dataset, output, target_att,subject, look_back=2):
-    for j in range(len(dataset) - look_back ):
-        curr_instance_id = j + look_back
+def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = 0 ):
+    for end_idx in range(len(dataset)):
+        start_idx = end_idx - window_size + 1
+        padding = 0-start_idx #TODO: Can use padding for that
+        start_idx = max(0,start_idx)
         for i,c in enumerate(feature_names):
-
-            a = dataset[c].values[j:curr_instance_id]
+            a = []
+            if padding>0:
+                a = [padding_const] * padding
+            a = np.concatenate((a,dataset[c].values[start_idx:end_idx+1]))
             output[i].append(a)
-        subject.append(dataset.subject.values[curr_instance_id])
-        target_att.append(dataset[target_feature_name].values[curr_instance_id])
+        subject.append(dataset.subject.values[end_idx])
+        target_att.append(dataset[target_feature_name].values[end_idx])
     return output
 
 
 # for sub_trial in data['subject_trial']:
 #     create_dataset(data.loc[data['subject_trial']==sub_trial])
 
-lookback = 20
+window_size = 20
 
 patient = []
 target_att=[]
 output = [[] for x in range(len(feature_names))]
 for sub_trial in data.subject_trial.unique():
     curr_subj_trial_data = data.loc[data.subject_trial==sub_trial,:]
-    output = create_dataset(curr_subj_trial_data,output,target_att,patient,look_back=lookback)
+    output = create_dataset(curr_subj_trial_data, output, target_att, patient, window_size=window_size)
     print(len(output[0]))
 
 X_nn = output
@@ -107,7 +111,7 @@ y = data[target_feature_name]
 lstm_size = 16
 
 from tensorflow import keras
-inputs = [keras.Input((lookback,1)) for x in feature_names]
+inputs = [keras.Input((window_size, 1)) for x in feature_names]
 # merge_one = layers.Concatenate(axis=-1)(inputs)
 
 
@@ -131,11 +135,11 @@ for train_idx,test_idx in logo.split(output[0], target_att,patient):
     test_data = [np.array(x)[test_idx] for x in X_nn]
     y_test = np.array(target_att)[test_idx]
 
-    # model.fit(train_data, y_train)
-    # preds = model.predict(test_data)#[:,0]
-    # curr_auc = roc_auc_score(y_test, preds)
-    # print(curr_auc)
-    # results['auc'].append(curr_auc)
+    model.fit(train_data, y_train)
+    preds = model.predict(test_data)#[:,0]
+    curr_auc = roc_auc_score(y_test, preds)
+    print(curr_auc)
+    results['auc'].append(curr_auc)
 print(pd.DataFrame(results).mean())
 
 

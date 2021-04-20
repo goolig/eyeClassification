@@ -75,7 +75,7 @@ num_cols = len(feature_names)
 
 
 # convert an array of values into a dataset matrix
-def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = 0 ):
+def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = -9999 ):
     for end_idx in range(len(dataset)):
         start_idx = end_idx - window_size + 1
         padding = 0-start_idx #TODO: Can use padding for that
@@ -108,34 +108,36 @@ X_nn = output
 X = data[feature_names]
 y = data[target_feature_name]
 
-lstm_size = 16
 
-from tensorflow import keras
-inputs = [keras.Input((window_size, 1)) for x in feature_names]
-# merge_one = layers.Concatenate(axis=-1)(inputs)
+def create_model():
+    global model
+    lstm_size = 16
+    from tensorflow import keras
+    inputs = [keras.Input((window_size, 1)) for x in feature_names]
+    # merge_one = layers.Concatenate(axis=-1)(inputs)
+    mask = [layers.Masking(mask_value=-9999)(x) for x in inputs]
+    # Add 2 bidirectional LSTMs
 
 
-# Add 2 bidirectional LSTMs
-blstm = [layers.LSTM(lstm_size)(x) for x in inputs] # input_shape=(lookback, num_cols)
-# x = layers.Bidirectional(layers.LSTM(4))(x)
-# Add a classifier
-output_layer = layers.concatenate(inputs=blstm, axis=1)
-
-outputs = layers.Dense(1, activation="sigmoid")(output_layer)
-model = keras.Model(inputs, outputs)
-model.summary()
-model.compile(optimizer="Adam", loss="binary_crossentropy")
+    blstm = [layers.LSTM(lstm_size)(x) for x in mask]  # input_shape=(lookback, num_cols)
+    # x = layers.Bidirectional(layers.LSTM(4))(x)
+    # Add a classifier
+    output_layer = layers.concatenate(inputs=blstm, axis=1)
+    outputs = layers.Dense(1, activation="sigmoid")(output_layer)
+    model = keras.Model(inputs, outputs)
+    model.compile(optimizer="Adam", loss="binary_crossentropy")
+    return model
 
 
 results = {'auc':[]}
 for train_idx,test_idx in logo.split(output[0], target_att,patient):
-    print(train_idx,test_idx)
     train_data = [np.array(x)[train_idx] for x in X_nn]
     y_train = np.array(target_att)[train_idx]
     test_data = [np.array(x)[test_idx] for x in X_nn]
     y_test = np.array(target_att)[test_idx]
 
-    model.fit(train_data, y_train)
+    model = create_model()
+    model.fit(train_data, y_train,verbose=2)
     preds = model.predict(test_data)#[:,0]
     curr_auc = roc_auc_score(y_test, preds)
     print(curr_auc)
@@ -149,3 +151,4 @@ print(pd.DataFrame(results).mean())
 
 print('num instances in NN data',len(output[0]))
 print('num instances in original data',len(data))
+print('average trial length',len(data)/len(data.subject_trial.unique()),'instances')

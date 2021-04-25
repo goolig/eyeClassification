@@ -54,12 +54,41 @@ def add_trial_num(data):
     data[trial_feature_name] = trial_number
     return data
 
+# convert an array of values into a dataset matrix
+def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = -9999 ):
+    for end_idx in range(len(dataset)):
+        start_idx = end_idx - window_size + 1
+        padding = 0-start_idx
+        start_idx = max(0,start_idx)
+        for i,c in enumerate(feature_names):
+            a = []
+            if padding>0:
+                a = [padding_const] * padding
+            a = np.array(np.concatenate((a,dataset[c].values[start_idx:end_idx+1])))
+            output[i].append(a)
+        subject.append(dataset.subject.values[end_idx])
+        target_att.append(dataset[target_feature_name].values[end_idx])
+    return output
+
+def create_data_wrapper(input_data):
+    patient = []
+    y = []
+    X = [[] for x in range(len(feature_names))]
+    for sub_trial in input_data.subject_trial.unique():
+        curr_subj_trial_data = input_data.loc[input_data.subject_trial == sub_trial, :]
+        X = create_dataset(curr_subj_trial_data, X, y, patient, window_size=window_size)
+    return [np.array(x) for x in X],np.array(y)
+
+
+#Reading data & prepearing
 data = pd.read_csv(os.path.join('data','result_better_features.csv'))
 data = add_trial_num(data)
 
 data['subject_trial'] = data[subject_feature_name].astype(str) +"_"+ data[trial_feature_name].astype(str)
 groups = data[subject_feature_name]
 subject_trial = data['subject_trial']
+
+num_cols = len(feature_names)
 
 logo = LeaveOneGroupOut()
 
@@ -83,42 +112,10 @@ logo = LeaveOneGroupOut()
 # #0.7
 #########################
 
-scaler = StandardScaler()
-data[feature_names] = scaler.fit_transform(data[feature_names]) #TODO: do only after train\test split
-num_cols = len(feature_names)
 
-
-# convert an array of values into a dataset matrix
-def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = -9999 ):
-    for end_idx in range(len(dataset)):
-        start_idx = end_idx - window_size + 1
-        padding = 0-start_idx
-        start_idx = max(0,start_idx)
-        for i,c in enumerate(feature_names):
-            a = []
-            if padding>0:
-                a = [padding_const] * padding
-            a = np.concatenate((a,dataset[c].values[start_idx:end_idx+1]))
-            output[i].append(a)
-        subject.append(dataset.subject.values[end_idx])
-        target_att.append(dataset[target_feature_name].values[end_idx])
-    return output
-
-
-# for sub_trial in data['subject_trial']:
-#     create_dataset(data.loc[data['subject_trial']==sub_trial])
-
-window_size = 10 #about  4 per second. 375 per trial, 90 seconds per trial
+window_size = 10
 #as the window size increase the performance imrpove. this must be due to some leaking. need to further check
 
-patient = []
-y_nn=[]
-output = [[] for x in range(len(feature_names))]
-for sub_trial in data.subject_trial.unique():
-    curr_subj_trial_data = data.loc[data.subject_trial==sub_trial,:]
-    output = create_dataset(curr_subj_trial_data, output, y_nn, patient, window_size=window_size)
-
-X_nn = output
 X = data[feature_names]
 y = data[target_feature_name]
 print('done prepearing data, number of features',len(feature_names))
@@ -127,28 +124,18 @@ def create_model(lstm_size = 32,mask_value=-9999,num_lstm=1,do=0.2):
     inputs = [keras.Input((window_size, 1)) for x in feature_names]
     mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
 
-
-
     blstm = layers.Concatenate(axis=-1)(mask)
 
 
-
+    #Adding blstm
     for i in range(num_lstm):
         blstm = layers.Bidirectional(layers.LSTM(lstm_size,return_sequences = True))(blstm)
         blstm = layers.Dropout(do)(blstm)
     blstm = layers.Bidirectional(layers.LSTM(lstm_size))(blstm)
 
-    output_layer = blstm
-
-
-    #Old code
-    # blstm = layers.LSTM(lstm_size)(merge_mask)
-    # blstm = [layers.LSTM(lstm_size)(x) for x in mask]  # input_shape=(lookback, num_cols)
-    # output_layer = layers.concatenate(inputs=blstm, axis=1)
-
 
     # Final layer
-    outputs = layers.Dense(1, activation="sigmoid")(output_layer)
+    outputs = layers.Dense(1, activation="sigmoid")(blstm)
 
     #Creating model
     model = keras.Model(inputs, outputs)
@@ -156,32 +143,34 @@ def create_model(lstm_size = 32,mask_value=-9999,num_lstm=1,do=0.2):
     return model
 
 
-
 results = {'auc':[]}
-print('number of subjects',len(set(patient)))
-for train_idx,test_idx in logo.split(output[0], y_nn, patient):
-    train_data = [np.array(x)[train_idx] for x in X_nn]
-    y_train = np.array(y_nn)[train_idx]
-    test_data = [np.array(x)[test_idx] for x in X_nn]
-    y_test = np.array(y_nn)[test_idx]
+print('number of subjects',len(set(data[subject_feature_name])))
+
+
+for train_idx,test_idx in logo.split(data, data[target_feature_name], data[subject_feature_name]):
+    scaler = StandardScaler() #scaling 0-1
+
+    train = data.iloc[train_idx,:].copy()
+    train[feature_names] = scaler.fit_transform(train[feature_names])
+    X_train,y_train = create_data_wrapper(train)
+
+    test = data.iloc[test_idx, :].copy()
+    test[feature_names] = scaler.transform(test[feature_names])
+    X_test, y_test = create_data_wrapper(test)
 
 
     print('creating model')
     model = create_model()
     print('fitting model')
-    model.fit(train_data, y_train,verbose=1)
-    preds = model.predict(test_data)#[:,0]
+    model.fit(X_train, y_train,verbose=1)
+    preds = model.predict(X_test)
     curr_auc = roc_auc_score(y_test, preds)
     print(curr_auc)
     results['auc'].append(curr_auc)
 print(pd.DataFrame(results).mean())
 
 
-#TODO: check that the number of test instances are the same - compare head-to-head with XGBoost
-# Try BLSTM instead of LSTM
-# Stack more LSTM layers and other parameters
-
-print('num instances in NN data',len(output[0]))
+# print('num instances in NN data',len(output[0]))
 print('num instances in original data',len(data))
 print('average trial length',len(data)/len(data.subject_trial.unique()),'instances')
 

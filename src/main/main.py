@@ -54,16 +54,16 @@ def add_trial_num(data):
     return data
 
 # convert an array of values into a dataset matrix
-def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = 0 ):
+def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = -9999 ):
     for end_idx in range(len(dataset)):
         start_idx = end_idx - window_size + 1
-        padding = 0-start_idx #TODO: Can use padding for that
+        padding = 0-start_idx
         start_idx = max(0,start_idx)
         for i,c in enumerate(feature_names):
             a = []
             if padding>0:
                 a = [padding_const] * padding
-            a = np.concatenate((a,dataset[c].values[start_idx:end_idx+1]))
+            a = np.array(np.concatenate((a,dataset[c].values[start_idx:end_idx+1])))
             output[i].append(a)
         subject.append(dataset.subject.values[end_idx])
         target_att.append(dataset[target_feature_name].values[end_idx])

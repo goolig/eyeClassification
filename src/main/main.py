@@ -15,7 +15,6 @@ import os
 from sklearn.ensemble import RandomForestClassifier
 from tensorflow.python.keras.layers import concatenate
 
-from src.main.hyper_params_XGBOOST import run_optuna_xgboost
 
 seed= 0
 random.seed(seed)
@@ -55,16 +54,16 @@ def add_trial_num(data):
     return data
 
 # convert an array of values into a dataset matrix
-def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = -9999 ):
+def create_dataset(dataset, output, target_att, subject, window_size=2,padding_const = 0 ):
     for end_idx in range(len(dataset)):
         start_idx = end_idx - window_size + 1
-        padding = 0-start_idx
+        padding = 0-start_idx #TODO: Can use padding for that
         start_idx = max(0,start_idx)
         for i,c in enumerate(feature_names):
             a = []
             if padding>0:
                 a = [padding_const] * padding
-            a = np.array(np.concatenate((a,dataset[c].values[start_idx:end_idx+1])))
+            a = np.concatenate((a,dataset[c].values[start_idx:end_idx+1]))
             output[i].append(a)
         subject.append(dataset.subject.values[end_idx])
         target_att.append(dataset[target_feature_name].values[end_idx])
@@ -113,30 +112,19 @@ logo = LeaveOneGroupOut()
 #########################
 
 
-window_size = 10
+window_size = 20
 #as the window size increase the performance imrpove. this must be due to some leaking. need to further check
 
 X = data[feature_names]
 y = data[target_feature_name]
 print('done prepearing data, number of features',len(feature_names))
 
-def create_model(lstm_size = 32,mask_value=-9999,num_lstm=1,do=0.2):
+def create_model(lstm_size = 16):
     inputs = [keras.Input((window_size, 1)) for x in feature_names]
-    mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
-
-    blstm = layers.Concatenate(axis=-1)(mask)
-
-
-    #Adding blstm
-    for i in range(num_lstm):
-        blstm = layers.Bidirectional(layers.LSTM(lstm_size,return_sequences = True))(blstm)
-        blstm = layers.Dropout(do)(blstm)
-    blstm = layers.Bidirectional(layers.LSTM(lstm_size))(blstm)
-
-
+    blstm = [layers.LSTM(lstm_size)(x) for x in inputs]
+    output_layer = layers.concatenate(inputs=blstm, axis=1)
     # Final layer
-    outputs = layers.Dense(1, activation="sigmoid")(blstm)
-
+    outputs = layers.Dense(1, activation="sigmoid")(output_layer)
     #Creating model
     model = keras.Model(inputs, outputs)
     model.compile(optimizer="Adam", loss="binary_crossentropy")

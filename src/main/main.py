@@ -1,7 +1,8 @@
+import tensorflow as tf
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 from tensorflow import keras
-from tensorflow.keras import layers
+from tensorflow.keras import layers, regularizers
 
 from tensorflow.keras.layers.experimental import preprocessing
 
@@ -13,6 +14,7 @@ import random
 import pandas as pd
 import os
 from sklearn.ensemble import RandomForestClassifier
+from tensorflow.python.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from tensorflow.python.keras.layers import concatenate
 
 from src.main.hyper_params_XGBOOST import run_optuna_xgboost
@@ -25,17 +27,29 @@ pd.set_option('display.width', None)
 
 # feature_names = ['median_pupil_size_1', 'median_pupil_size_2','poly_pupil_size_1', 'poly_pupil_size_2', 'max_sac_1', 'max_sac_2',
 #        'count_sac_1', 'count_sac_2', 'diff_pos_x_1', 'diff_pos_x_2', 'diff_pos_y_1', 'diff_pos_y_2']
-feature_names = ['psr', 'psl', 'fix_r_dur', 'fix_l_dur',
-       'fix_r_disx', 'fix_l_disx', 'fix_r_disy', 'fix_l_disy', 'fix_r_c',
-       'fix_l_c', 'sac_r_dur', 'sac_l_dur', 'sac_l_ampl', 'sac_r_ampl',
-       'sac_l_pv', 'sac_r_pv', 'sac_l_x', 'sac_l_y', 'sac_r_x', 'sac_r_y',
-       'sac_r_c', 'sac_l_c', 'psr_poly_1', 'psr_poly_2', 'psr_poly_3',
-       'psl_poly_1', 'psl_poly_2', 'psl_poly_3']
+feature_names = [
+                'psr', 'psl',
+                'fix_r_dur', 'fix_l_dur',
+                'fix_r_disx', 'fix_l_disx',
+                'fix_r_disy', 'fix_l_disy',
+                'fix_r_c', 'fix_l_c',
+                'sac_r_dur', 'sac_l_dur',
+                'sac_r_ampl', 'sac_l_ampl',
+                'sac_r_pv','sac_l_pv',
+                'sac_r_x', 'sac_l_x',
+                'sac_r_y', 'sac_l_y',
+                'sac_r_c', 'sac_l_c',
+                'psr_poly_1','psl_poly_1',
+                'psr_poly_2', 'psl_poly_2',
+                'psr_poly_3', 'psl_poly_3']
 
 target_feature_name = 'load'
 time_feature_name = 'time'#'times'
 subject_feature_name = 'subject'
 trial_feature_name = 'trial'
+
+
+window_size = 20
 
 def add_trial_num(data):
     times = -1
@@ -113,33 +127,53 @@ logo = LeaveOneGroupOut()
 #########################
 
 
-window_size = 10
+
 #as the window size increase the performance imrpove. this must be due to some leaking. need to further check
 
 X = data[feature_names]
 y = data[target_feature_name]
 print('done prepearing data, number of features',len(feature_names))
 
-def create_model(lstm_size = 32,mask_value=-9999,num_lstm=1,do=0.2):
+def create_model(lstm_size = 16, mask_value=-9999, num_lstm=3, do=0.5, model_interactions_lstm=False):
     inputs = [keras.Input((window_size, 1)) for x in feature_names]
     mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
-
-    blstm = layers.Concatenate(axis=-1)(mask)
-
-
-    #Adding blstm
-    for i in range(num_lstm):
-        blstm = layers.Bidirectional(layers.LSTM(lstm_size,return_sequences = True))(blstm)
+    if not model_interactions_lstm:
+        to_concat = [layers.LSTM(lstm_size)(x) for x in mask]
+    else:
+        to_concat=mask
+    concat = layers.Concatenate(axis=-1)(to_concat)
+    blstm = layers.Dropout(do)(concat)
+    if model_interactions_lstm:
+        # Adding blstm
+        for i in range(num_lstm):
+            blstm = layers.Bidirectional(layers.LSTM(lstm_size,return_sequences = True))(blstm)
+            blstm = layers.Dropout(do)(blstm)
+        blstm = layers.Bidirectional(layers.LSTM(lstm_size))(blstm)
         blstm = layers.Dropout(do)(blstm)
-    blstm = layers.Bidirectional(layers.LSTM(lstm_size))(blstm)
+    # Final layer
+    outputs = layers.Dense(1, activation="sigmoid")(blstm)
+    #Creating model
+    model = keras.Model(inputs, outputs)
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001,) ,loss="binary_crossentropy",metrics=['AUC'])
+    return model
 
+def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5):
+    inputs = [keras.Input((window_size, 1)) for x in feature_names]
+    mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
+    assert len(inputs)%2 ==0,'input is not given in pairs'
+
+    lstms = []
+    for i in range(int(len(inputs)/2)):
+        con  = layers.Concatenate(axis=-1)(mask[i*2:i*2+2])
+        lstms+=layers.LSTM(lstm_size)(con)
+    concat = layers.Concatenate(axis=-1)(lstms)
+    blstm = layers.Dropout(do)(concat)
 
     # Final layer
     outputs = layers.Dense(1, activation="sigmoid")(blstm)
-
     #Creating model
     model = keras.Model(inputs, outputs)
-    model.compile(optimizer="Adam", loss="binary_crossentropy")
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001,) ,loss="binary_crossentropy",metrics=['AUC'])
     return model
 
 
@@ -162,7 +196,15 @@ for train_idx,test_idx in logo.split(data, data[target_feature_name], data[subje
     print('creating model')
     model = create_model()
     print('fitting model')
-    model.fit(X_train, y_train,verbose=1)
+
+    mon = 'val_auc'
+    verb = 0
+
+    reduce_lr = ReduceLROnPlateau(monitor=mon, factor=0.1, patience=0, min_lr=0.0001,verbose=verb,min_delta=0.01,cooldown=1)
+    early_stop = EarlyStopping(monitor=mon, min_delta=0.0001, patience=3,
+                               restore_best_weights=True,mode='max')
+
+    model.fit(X_train, y_train, verbose=1, epochs=15, callbacks=[early_stop,reduce_lr], validation_split=0.15,batch_size=512)
     preds = model.predict(X_test)
     curr_auc = roc_auc_score(y_test, preds)
     print(curr_auc)

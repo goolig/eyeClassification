@@ -15,7 +15,7 @@ import pandas as pd
 import os
 from sklearn.ensemble import RandomForestClassifier
 from tensorflow.python.keras.callbacks import ReduceLROnPlateau, EarlyStopping
-from tensorflow.python.keras.layers import concatenate
+
 
 from src.main.hyper_params_XGBOOST import run_optuna_xgboost
 
@@ -135,10 +135,13 @@ y = data[target_feature_name]
 print('done prepearing data, number of features',len(feature_names))
 
 def create_model(lstm_size = 16, mask_value=-9999, num_lstm=3, do=0.5, model_interactions_lstm=False):
+    #model_interactions_lstm=True : 0.828. bi directional
+    #model_interactions_lstm=False: 0.879. uni directional
+    #model_interactions_lstm=False: 0.895. bi directional
     inputs = [keras.Input((window_size, 1)) for x in feature_names]
     mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
     if not model_interactions_lstm:
-        to_concat = [layers.LSTM(lstm_size)(x) for x in mask]
+        to_concat = [layers.Bidirectional(layers.LSTM(lstm_size))(x) for x in mask]
     else:
         to_concat=mask
     concat = layers.Concatenate(axis=-1)(to_concat)
@@ -158,14 +161,16 @@ def create_model(lstm_size = 16, mask_value=-9999, num_lstm=3, do=0.5, model_int
     return model
 
 def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5):
+    #Bidirectional - 0.905
     inputs = [keras.Input((window_size, 1)) for x in feature_names]
     mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
     assert len(inputs)%2 ==0,'input is not given in pairs'
 
     lstms = []
+    print('num lstm',range(int(len(inputs)/2)))
     for i in range(int(len(inputs)/2)):
         con  = layers.Concatenate(axis=-1)(mask[i*2:i*2+2])
-        lstms+=layers.LSTM(lstm_size)(con)
+        lstms.append(layers.Bidirectional(layers.LSTM(lstm_size))(con))
     concat = layers.Concatenate(axis=-1)(lstms)
     blstm = layers.Dropout(do)(concat)
 
@@ -173,7 +178,7 @@ def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5):
     outputs = layers.Dense(1, activation="sigmoid")(blstm)
     #Creating model
     model = keras.Model(inputs, outputs)
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001,) ,loss="binary_crossentropy",metrics=['AUC'])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01,) ,loss="binary_crossentropy",metrics=['AUC'])
     return model
 
 
@@ -194,17 +199,19 @@ for train_idx,test_idx in logo.split(data, data[target_feature_name], data[subje
 
 
     print('creating model')
-    model = create_model()
+    model = create_model_pairs()
     print('fitting model')
 
     mon = 'val_auc'
     verb = 0
 
-    reduce_lr = ReduceLROnPlateau(monitor=mon, factor=0.1, patience=0, min_lr=0.0001,verbose=verb,min_delta=0.01,cooldown=1)
+    assert 'auc' in mon,'must change mode in following two lines'
+    reduce_lr = ReduceLROnPlateau(monitor=mon, factor=0.1, patience=0,
+                                  min_lr=0.0001,min_delta=0.01,cooldown=1,mode='max')
     early_stop = EarlyStopping(monitor=mon, min_delta=0.0001, patience=3,
                                restore_best_weights=True,mode='max')
 
-    model.fit(X_train, y_train, verbose=1, epochs=15, callbacks=[early_stop,reduce_lr], validation_split=0.15,batch_size=512)
+    model.fit(X_train, y_train, verbose=1, epochs=50, callbacks=[early_stop,reduce_lr], validation_split=0.15) #,batch_size=512
     preds = model.predict(X_test)
     curr_auc = roc_auc_score(y_test, preds)
     print(curr_auc)

@@ -160,8 +160,9 @@ def create_model(lstm_size = 16, mask_value=-9999, num_lstm=3, do=0.5, model_int
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001,) ,loss="binary_crossentropy",metrics=['AUC'])
     return model
 
-def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5):
+def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5,add_att=True):
     #Bidirectional - 0.905
+    #Biderctional + attention layers.Attention()([blstm,blstm]) 0.914
     inputs = [keras.Input((window_size, 1)) for x in feature_names]
     mask = [layers.Masking(mask_value=mask_value)(x) for x in inputs]
     assert len(inputs)%2 ==0,'input is not given in pairs'
@@ -170,9 +171,15 @@ def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5):
     print('num lstm',range(int(len(inputs)/2)))
     for i in range(int(len(inputs)/2)):
         con  = layers.Concatenate(axis=-1)(mask[i*2:i*2+2])
-        lstms.append(layers.Bidirectional(layers.LSTM(lstm_size))(con))
+        lstms.append(layers.Bidirectional(layers.LSTM(lstm_size,return_sequences=False))(con))
     concat = layers.Concatenate(axis=-1)(lstms)
+    concat = layers.Flatten()(concat)
     blstm = layers.Dropout(do)(concat)
+
+    if add_att:
+        blstm = layers.Attention()([blstm,blstm])
+        #blstm = layers.Concatenate(axis=-1)([a,b])
+        blstm = layers.Dropout(do)(blstm)
 
     # Final layer
     outputs = layers.Dense(1, activation="sigmoid")(blstm)

@@ -32,12 +32,17 @@ best_params = {'n_estimators': 89, 'max_depth': 9, 'reg_alpha': 4, 'reg_lambda':
 scores = cross_validate(xgboost.XGBClassifier(**best_params), X, y, cv=logo.split(X, y,groups),scoring='roc_auc')
 print('auc XGBost optimized',sum(scores['test_score'])/len(scores['test_score']))
 #auc XGBost optimized 0.727
+#with new features auc XGBost optimized 0.8578894614888838
+
 
 scores = cross_validate(xgboost.XGBClassifier(), X, y, cv=logo.split(X, y,groups),scoring='roc_auc')
 print('auc XGBost',sum(scores['test_score'])/len(scores['test_score']))
 #0.71
+# with new features auc random forest 0.8402917882600227
 
 scores = cross_validate(RandomForestClassifier(), X, y, cv=logo.split(X, y,groups),scoring='roc_auc')
 print('auc random forest',sum(scores['test_score'])/len(scores['test_score']))
 #0.7
+#with new features auc random forest 0.8402917882600227
+
 ########################

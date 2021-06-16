@@ -11,7 +11,9 @@ os.chdir(".."); os.chdir("..")
 
 data = pd.read_csv(os.path.join('data','result_better_features.csv'))
 data = add_trial_num(data)
-data,feature_names = average_l_r(data,feature_names)
+
+#data,feature_names = average_l_r(data,feature_names)
+
 data['subject_trial'] = data[subject_feature_name].astype(str) +"_"+ data[trial_feature_name].astype(str)
 groups = data[subject_feature_name]
 subject_trial = data['subject_trial']

@@ -37,9 +37,9 @@ num_cols = len(feature_names)
 logo = LeaveOneGroupOut()
 
 
-X = data[feature_names]
-y = data[target_feature_name]
-print('done prepearing data, number of features',len(feature_names))
+# X = data[feature_names]
+# y = data[target_feature_name]
+# print('done prepearing data, number of features',len(feature_names))
 
 def create_model(lstm_size = 16, mask_value=-9999, num_lstm=3, do=0.5, model_interactions_lstm=False):
     #model_interactions_lstm=True : 0.828. bi directional
@@ -112,7 +112,7 @@ def create_model_pairs(lstm_size = 16, mask_value=-9999, do=0.5,add_att=True):
 results = {'auc':[],'aupr':[],'accuracy':[],'precision':[],'recall':[],'subject':[],'window_size':[],'test_type':[]}
 print('number of subjects',len(set(data[subject_feature_name])))
 
-for window_size in [25,50]: #,100,150
+for window_size in [25]: #,100,150
     curr_subject_id=0
     for train_idx,test_idx in logo.split(data, data[target_feature_name], data[subject_feature_name]):
         scaler = StandardScaler() #scaling 0-1
@@ -160,7 +160,7 @@ for window_size in [25,50]: #,100,150
             curr_acc = accuracy_score(y_test,preds)
             curr_prec = precision_score(y_test,preds)
             curr_recall = recall_score(y_test,preds)
-            pd.DataFrame({'y':y_test,'preds':[x[0] for x in pred_scores]}).to_csv(test_name+'_'+str(window_size) + '_' + str(curr_subject_id) + '_preds.csv', index=False)
+            pd.DataFrame({'y':y_test,'preds':[x[0] for x in pred_scores]}).to_csv(os.path.join('results',test_name+'_'+str(window_size) + '_' + str(curr_subject_id) + '_preds.csv'), index=False)
             print(curr_auc)
             results['auc'].append(curr_auc)
             results['aupr'].append(curr_aupr)
@@ -173,7 +173,7 @@ for window_size in [25,50]: #,100,150
 
         curr_subject_id+=1
     print(pd.DataFrame(results).mean())
-    pd.DataFrame(results).to_csv('results.csv')
+    pd.DataFrame(results).to_csv(os.path.join('results','results.csv'))
 
 
 # print('num instances in NN data',len(output[0]))

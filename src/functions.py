@@ -21,17 +21,28 @@ def add_trial_num(data):
     return data
 
 # convert an array of values into a dataset matrix
-def average_l_r(data,feature_names):
+def average_l_r(data,feature_names,eye='avg'):
     #average of both eyes as asked by Hagit.
     new_cols = []
     for i in range(int(len(feature_names) / 2)):
-        f1 = feature_names[i*2]
-        f2 = feature_names[i*2+1]
-        new_f_name = f1 + '_avg_eyes'
-        data[new_f_name] = (data[f1]+data[f2])/2.0
-        del data[f1]
-        del data[f2]
-        new_cols.append(new_f_name)
+        right = feature_names[i * 2]
+        left = feature_names[i * 2 + 1]
+        if eye=='avg':
+            new_f_name = right + '_avg_eyes'
+            data[new_f_name] = (data[right]+data[left])/2.0
+            del data[right]
+            del data[left]
+            new_cols.append(new_f_name)
+        elif eye=='r':
+            del data[left]
+            new_cols.append(right)
+        elif eye=='l':
+            del data[right]
+            new_cols.append(left)
+        elif eye=='both':
+            new_cols.append(right)
+            new_cols.append(left)
+
     return data,new_cols
 
 def create_dataset(dataset, output, target_att, subject,feature_names, window_size=2,padding_const = -9999 ):
@@ -50,7 +61,7 @@ def create_dataset(dataset, output, target_att, subject,feature_names, window_si
     return output
 
 
-def create_data_wrapper(input_data,window_size,feature_names,test=False):
+def create_data_wrapper(input_data,window_size,feature_names,test=False,as_np_array=True):
     patient = []
     y = []
     X = [[] for x in range(len(feature_names))]
@@ -61,4 +72,8 @@ def create_data_wrapper(input_data,window_size,feature_names,test=False):
     else:
         curr_subj_trial_data = input_data
         X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size)
-    return [np.array(x) for x in X],np.array(y)
+    if as_np_array:
+        return [np.array(x) for x in X],np.array(y)
+    else:
+        return X, y
+

@@ -32,7 +32,7 @@ def objective(trial: Trial, X, y, groups) -> float:
                             cv=logo.split(X, y, groups), scoring='roc_auc')
     return sum(scores['test_score'])/len(scores['test_score'])
 
-def run_optuna_xgboost(X, Y, groups):
+def run_optuna_xgboost(X, Y, groups,n_trials=10):
     study = optuna.create_study(direction='maximize', sampler=TPESampler())
-    study.optimize(lambda trial: objective(trial, X, Y,groups), n_trials=100)
+    study.optimize(lambda trial: objective(trial, X, Y,groups), n_trials=n_trials)
     return study.best_trial.params

@@ -14,13 +14,31 @@ results = {'auc': [], 'aupr': [], 'accuracy': [], 'precision': [], 'recall': [],
            'test_type': [], 'file_name': [], 'eye': []}
 max_number_of_evaluation_groups = 3
 feature_names_original = feature_names
-
+xgboost_parmas = {'n_estimators': 875, 'max_depth': 22, 'reg_alpha': 2, 'reg_lambda': 5, 'min_child_weight': 38, 'gamma': 0, 'learning_rate': 0.01540293696409555, 'subsample': 0.19692882420211885, 'colsample_bytree': 0.45999999999999996}
 
 def neuralnet_to_tabular_representation(arr):
     return np.array([[curr_win_pos for feature in range(len(arr)) for curr_win_pos in arr[feature][pat]] for pat in range(len(arr[0]))])
-if False:
 
-    for file_name in ['result_old_exp2.csv', 'result_better_features.csv',
+
+if False:
+    data = pd.read_csv(os.path.join('data', 'result_old_exp.csv'))
+    data = add_trial_num(data)
+    data, feature_names = average_l_r(data, feature_names_original)
+    data['subject_trial'] = data[subject_feature_name].astype(str) + "_" + data[trial_feature_name].astype(str)
+    groups = data[subject_feature_name]
+    subject_trial = data['subject_trial']
+    num_cols = len(feature_names)
+
+    X_train, y_train = create_data_wrapper(data, 50, feature_names)
+    X_train = neuralnet_to_tabular_representation(X_train)
+
+    print('starting params')
+    print(set(subject_trial))
+    run_optuna_xgboost(X_train, y_train, [int(x.split('_')[0]) % 3 for x in subject_trial])
+
+
+if True:
+    for file_name in ['result_better_features.csv', 'result_old_exp2.csv',
                       'result_old_exp.csv']:  # 'result_better_features.csv', 'result_old_exp.csv'
 
         data = pd.read_csv(os.path.join('data', file_name))
@@ -48,10 +66,10 @@ if False:
                 model = xgboost.XGBClassifier()
 
                 X_train = neuralnet_to_tabular_representation(X_train)
-
+                print('training')
                 model.fit(X_train, y_train)
 
-                X_test, y_test = create_data_wrapper(test, window_size, feature_names, test=True)
+                X_test, y_test = create_data_wrapper(test, window_size, feature_names, test=True,padding_const=None)
                 X_test = neuralnet_to_tabular_representation(X_test)
 
                 pred_scores = model.predict_proba(X_test)[:,-1]
@@ -85,18 +103,3 @@ if False:
         res = pd.DataFrame(results)
         print(res[res.test_type=='all'].mean())
         pd.DataFrame(results).to_csv(os.path.join('results','results.csv'))
-
-data = pd.read_csv(os.path.join('data', 'result_old_exp.csv'))
-data = add_trial_num(data)
-data, feature_names = average_l_r(data, feature_names_original)
-data['subject_trial'] = data[subject_feature_name].astype(str) + "_" + data[trial_feature_name].astype(str)
-groups = data[subject_feature_name]
-subject_trial = data['subject_trial']
-num_cols = len(feature_names)
-
-X_train, y_train = create_data_wrapper(data, 50, feature_names)
-X_train = neuralnet_to_tabular_representation(X_train)
-
-print('starting params')
-print(set(subject_trial))
-run_optuna_xgboost(X_train,y_train,[int(x.split('_')[0])%3 for x in subject_trial])

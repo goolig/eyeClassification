@@ -45,7 +45,7 @@ def average_l_r(data,feature_names,eye='avg'):
 
     return data,new_cols
 
-def create_dataset(dataset, output, target_att, subject,feature_names, window_size=2,padding_const = -9999 ):
+def create_dataset(dataset, output, target_att, subject,feature_names, padding_const,window_size=2,use_padded=True ):
     for end_idx in range(len(dataset)):
         start_idx = end_idx - window_size + 1
         padding = 0-start_idx
@@ -54,24 +54,26 @@ def create_dataset(dataset, output, target_att, subject,feature_names, window_si
             a = []
             if padding>0:
                 a = [padding_const] * padding
-            a = np.array(np.concatenate((a,dataset[c].values[start_idx:end_idx+1])))
-            output[i].append(a)
-        subject.append(dataset.subject.values[end_idx])
-        target_att.append(dataset[target_feature_name].values[end_idx])
+            if use_padded or padding<=0:
+                a = np.array(np.concatenate((a,dataset[c].values[start_idx:end_idx+1])))
+                output[i].append(a)
+        if use_padded or padding <= 0:
+            subject.append(dataset.subject.values[end_idx])
+            target_att.append(dataset[target_feature_name].values[end_idx])
     return output
 
 
-def create_data_wrapper(input_data,window_size,feature_names,test=False,as_np_array=True):
+def create_data_wrapper(input_data,window_size,feature_names,test=False,as_np_array=True,padding_const=-9999):
     patient = []
     y = []
     X = [[] for x in range(len(feature_names))]
     if not test:
         for sub_trial in input_data.subject_trial.unique():
             curr_subj_trial_data = input_data.loc[input_data.subject_trial == sub_trial, :]
-            X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size)
+            X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size,padding_const=padding_const,use_padded=test)
     else:
         curr_subj_trial_data = input_data
-        X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size)
+        X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size,padding_const=padding_const,use_padded=test)
     if as_np_array:
         return [np.array(x) for x in X],np.array(y)
     else:

@@ -1,6 +1,8 @@
 #Reading data & prepearing
+from const import aug_test
 import os
 import pandas as pd
+import random
 import xgboost
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score, precision_score, recall_score
@@ -18,6 +20,7 @@ xgboost_parmas = {'n_estimators': 875, 'max_depth': 22, 'reg_alpha': 2, 'reg_lam
 
 def neuralnet_to_tabular_representation(arr):
     return np.array([[curr_win_pos for feature in range(len(arr)) for curr_win_pos in arr[feature][pat]] for pat in range(len(arr[0]))])
+random_state = np.random.RandomState(0)
 
 
 if False:
@@ -72,33 +75,45 @@ if True:
                 X_test, y_test = create_data_wrapper(test, window_size, feature_names, test=True,padding_const=None)
                 X_test = neuralnet_to_tabular_representation(X_test)
 
-                pred_scores = model.predict_proba(X_test)[:,-1]
-                t = 0.5
-                preds = [1 if x > t else 0 for x in pred_scores]
-                try:
-                    curr_auc = roc_auc_score(y_test, pred_scores)
-                except:
-                    curr_auc = -1
-                try:
-                    curr_aupr = average_precision_score(y_test, pred_scores)
-                except:
-                    curr_aupr = -1
-                curr_acc = accuracy_score(y_test, preds)
-                curr_prec = precision_score(y_test, preds)
-                curr_recall = recall_score(y_test, preds)
-                pd.DataFrame({'y': y_test, 'preds': [x for x in pred_scores]}). \
-                    to_csv(os.path.join('results', file_name + '_' + '_' + str(window_size) + '_' + str(eval_id) + '_preds.csv'), index=False)
-                # print(curr_auc)
-                results['auc'].append(curr_auc)
-                results['aupr'].append(curr_aupr)
-                results['accuracy'].append(curr_acc)
-                results['recall'].append(curr_recall)
-                results['precision'].append(curr_prec)
-                results['window_size'].append(window_size)
-                results['eval_id'].append(eval_id)
-                results['test_type'].append(0)
-                results['eye'].append(0)
-                results['file_name'].append(file_name)
+                X_test_pos, y_test_pos = create_data_wrapper(test[test['load']==1],window_size,feature_names, test=True,padding_const=None)
+                X_test_pos = neuralnet_to_tabular_representation(X_test_pos)
+
+                X_test_neg, y_test_neg = create_data_wrapper(test[test['load']==0], window_size,feature_names,test=True,padding_const=None)
+                X_test_neg = neuralnet_to_tabular_representation(X_test_neg)
+
+                X_test_aug, y_test_aug = create_data_wrapper(aug_test(test,random_state), window_size,feature_names,test=True,padding_const=None)
+                X_test_aug = neuralnet_to_tabular_representation(X_test_aug)
+
+
+                for test_name, X_test, y_test in [('all',X_test,y_test),('pos',X_test_pos,y_test_pos),('neg',X_test_neg,y_test_neg),('aug',X_test_aug,y_test_aug)]:
+
+                    pred_scores = model.predict_proba(X_test)[:,-1]
+                    t = 0.5
+                    preds = [1 if x > t else 0 for x in pred_scores]
+                    try:
+                        curr_auc = roc_auc_score(y_test, pred_scores)
+                    except:
+                        curr_auc = -1
+                    try:
+                        curr_aupr = average_precision_score(y_test, pred_scores)
+                    except:
+                        curr_aupr = -1
+                    curr_acc = accuracy_score(y_test, preds)
+                    curr_prec = precision_score(y_test, preds)
+                    curr_recall = recall_score(y_test, preds)
+                    pd.DataFrame({'y': y_test, 'preds': [x for x in pred_scores]}). \
+                        to_csv(os.path.join('results', file_name + '_' + '_' + str(window_size) + '_' + str(eval_id) + str(test_name) + '_preds.csv'), index=False)
+                    # print(curr_auc)
+                    results['auc'].append(curr_auc)
+                    results['aupr'].append(curr_aupr)
+                    results['accuracy'].append(curr_acc)
+                    results['recall'].append(curr_recall)
+                    results['precision'].append(curr_prec)
+                    results['window_size'].append(window_size)
+                    results['eval_id'].append(eval_id)
+                    results['test_type'].append(test_name)
+                    results['eye'].append('both')
+                    results['file_name'].append(file_name)
                 eval_id += 1
         res = pd.DataFrame(results)
         print(res[res.test_type=='all'].mean())

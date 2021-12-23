@@ -19,9 +19,7 @@ def objective(trial: Trial, X, y, groups) -> float:
         'gamma': trial.suggest_int('gamma', 0, 5),
         'learning_rate': trial.suggest_loguniform('learning_rate', 0.005, 0.5),
         'subsample': trial.suggest_loguniform('subsample', 0.001, 1),
-
         'colsample_bytree': trial.suggest_discrete_uniform('colsample_bytree', 0.1, 1, 0.01),
-
         'nthread': -1
     }
     model = XGBClassifier(**param)
@@ -29,7 +27,7 @@ def objective(trial: Trial, X, y, groups) -> float:
     logo = LeaveOneGroupOut()
 
     scores = cross_validate(model,X, y,
-                            cv=logo.split(X, y, groups), scoring='roc_auc')
+                            cv=logo.split(X, y, groups), scoring='roc_auc',n_jobs=-1)
     return sum(scores['test_score'])/len(scores['test_score'])
 
 def run_optuna_xgboost(X, Y, groups,n_trials=10):

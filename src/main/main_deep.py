@@ -1,4 +1,5 @@
 import tensorflow as tf
+from const import aug_test
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import StandardScaler
 from tensorflow import keras
@@ -14,7 +15,7 @@ from tensorflow.python.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from src.constants import feature_names
 from src.functions import *
 from src.main.hyper_params_XGBOOST import run_optuna_xgboost
-
+random_state = np.random.RandomState(0)
 seed= 0
 random.seed(seed)
 os.chdir(".."); os.chdir("..")
@@ -117,7 +118,7 @@ for file_name in ['result_old_exp2.csv','result_better_features.csv', 'result_ol
         print('number of subjects',len(set(data[subject_feature_name])))
 
         #for window_size in [10,20,40,60,80,100,120,140,160,180]: #,200
-        for window_size in [100]: #for attention check
+        for window_size in [10,20,40,60,80,100]: #for attention check
             eval_id=0
             for train_idx,test_idx in logo.split(data, data[target_feature_name], data[subject_feature_name]%max_number_of_evaluation_groups):
                 scaler = StandardScaler() #scaling 0-1
@@ -149,8 +150,11 @@ for file_name in ['result_old_exp2.csv','result_better_features.csv', 'result_ol
                 X_test, y_test = create_data_wrapper(test,window_size, feature_names,test=True)
                 X_test_pos, y_test_pos = create_data_wrapper(test[test['load']==1],window_size,feature_names, test=True)
                 X_test_neg, y_test_neg = create_data_wrapper(test[test['load']==0], window_size,feature_names,test=True)
+                X_test_aug, y_test_aug = create_data_wrapper(aug_test(test,random_state), window_size,feature_names,test=True,padding_const=None)
 
-                for test_name, X_test, y_test in [('all',X_test,y_test),('pos',X_test_pos,y_test_pos),('neg',X_test_neg,y_test_neg)]:
+
+
+                for test_name, X_test, y_test in [('all',X_test,y_test),('pos',X_test_pos,y_test_pos),('neg',X_test_neg,y_test_neg),('aug',X_test_aug,y_test_aug)]:
                     pred_scores = model.predict(X_test)
                     t = 0.5
                     preds = [1 if x[0]>t else 0 for x in pred_scores]

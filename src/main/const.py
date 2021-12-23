@@ -1,3 +1,4 @@
+import pandas as pd
 def aug_test(test_data,random_state):
     ans = None
     for subject_trial in set(test_data.subject_trial):

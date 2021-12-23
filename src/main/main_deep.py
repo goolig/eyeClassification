@@ -150,7 +150,7 @@ for file_name in ['result_old_exp2.csv','result_better_features.csv', 'result_ol
                 X_test, y_test = create_data_wrapper(test,window_size, feature_names,test=True)
                 X_test_pos, y_test_pos = create_data_wrapper(test[test['load']==1],window_size,feature_names, test=True)
                 X_test_neg, y_test_neg = create_data_wrapper(test[test['load']==0], window_size,feature_names,test=True)
-                X_test_aug, y_test_aug = create_data_wrapper(aug_test(test,random_state), window_size,feature_names,test=True,padding_const=None)
+                X_test_aug, y_test_aug = create_data_wrapper(aug_test(test,random_state), window_size,feature_names,test=True)
 
 
 

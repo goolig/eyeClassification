@@ -17,6 +17,12 @@ feature_names = [
                 'psr_poly_3', 'psl_poly_3'
 ]
 
+feature_names_raw = [
+    'xpr', 'xpl',
+    'psr', 'psl',
+    'ypr', 'ypl'
+]
+
 target_feature_name = 'load'
 time_feature_name = 'time'#'times'
 subject_feature_name = 'subject'

@@ -70,10 +70,10 @@ def create_data_wrapper(input_data,window_size,feature_names,test=False,as_np_ar
     if not test:
         for sub_trial in input_data.subject_trial.unique():
             curr_subj_trial_data = input_data.loc[input_data.subject_trial == sub_trial, :]
-            X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size,padding_const=padding_const,use_padded=test)
+            X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size,padding_const=padding_const,use_padded=True)
     else:
         curr_subj_trial_data = input_data
-        X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size,padding_const=padding_const,use_padded=test)
+        X = create_dataset(curr_subj_trial_data, X, y, patient,feature_names, window_size=window_size,padding_const=padding_const,use_padded=True)
     if as_np_array:
         return [np.array(x) for x in X],np.array(y)
     else:

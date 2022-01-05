@@ -2,12 +2,9 @@
 from const import aug_test
 import os
 import pandas as pd
-import random
 import xgboost
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score, precision_score, recall_score
-from sklearn.model_selection import LeaveOneGroupOut, cross_validate
-from hyper_params_XGBOOST import run_optuna_xgboost
+from sklearn.model_selection import LeaveOneGroupOut
 from src.constants import *
 from src.functions import *
 os.chdir(".."); os.chdir("..")
@@ -15,7 +12,7 @@ os.chdir(".."); os.chdir("..")
 results = {'auc': [], 'aupr': [], 'accuracy': [], 'precision': [], 'recall': [], 'eval_id': [], 'window_size': [],
            'test_type': [], 'file_name': [], 'eye': []}
 max_number_of_evaluation_groups = 3
-feature_names_original = feature_names
+feature_names_original = feature_names_raw #feature_names
 xgboost_parmas = {'n_estimators': 875, 'max_depth': 22, 'reg_alpha': 2, 'reg_lambda': 5, 'min_child_weight': 38, 'gamma': 0, 'learning_rate': 0.01540293696409555, 'subsample': 0.19692882420211885, 'colsample_bytree': 0.45999999999999996}
 
 def neuralnet_to_tabular_representation(arr):
@@ -41,8 +38,7 @@ if False:
 
 
 if True:
-    for file_name in ['result_better_features.csv', 'result_old_exp2.csv',
-                      'result_old_exp.csv']:  # 'result_better_features.csv', 'result_old_exp.csv'
+    for file_name in ['raw_reduced.csv']:  # 'result_better_features.csv', 'result_old_exp.csv'
 
         data = pd.read_csv(os.path.join('data', file_name))
         data = add_trial_num(data)
@@ -55,11 +51,14 @@ if True:
         logo = LeaveOneGroupOut()
         print('number of subjects',len(set(data[subject_feature_name])))
         eval_id=0
+
+        data[feature_names] = data[feature_names].replace('-1',None)
+        data[feature_names] = data[feature_names].replace(-1, None)
         for train_idx, test_idx in logo.split(data, data[target_feature_name],
                                               data[subject_feature_name] % max_number_of_evaluation_groups):
 
             #for window size
-            for window_size in [10,20,40,60,80,100,120,140,160,180]:
+            for window_size in [40]:#[10,20,40,60,80,100,120,140,160,180]:
                 train = data.iloc[train_idx, :].copy()
                 #train[feature_names] = scaler.fit_transform(train[feature_names])
                 X_train, y_train = create_data_wrapper(train, window_size, feature_names)
@@ -116,5 +115,5 @@ if True:
                     results['file_name'].append(file_name)
                 eval_id += 1
         res = pd.DataFrame(results)
-        print(res[res.test_type=='all'].mean())
+        print(res[res.test_type=='aug'].mean())
         pd.DataFrame(results).to_csv(os.path.join('results','results.csv'))

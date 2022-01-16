@@ -39,10 +39,21 @@ def create_model_conv(conv_num = 64,kernel_size=5, mask_value=-9999, do=0.5):
     to_concat=mask
     concat = layers.Concatenate(axis=-1)(to_concat)
 
-    layer = Conv1D(filters=conv_num, kernel_size=kernel_size, activation='relu',input_shape=(len(inputs),len(feature_names)))(concat)
-    layer = Conv1D(filters=int(conv_num/2), kernel_size=kernel_size, activation='relu')(layer)
+    layer = Conv1D(filters=conv_num, kernel_size=kernel_size,input_shape=(len(inputs),len(feature_names)))(concat)
+    layer = keras.layers.BatchNormalization()(layer)
+    layer = keras.layers.ReLU()(layer)
+
+    layer = Conv1D(filters=int(conv_num/2), kernel_size=kernel_size)(layer)
+    layer = keras.layers.BatchNormalization()(layer)
+    layer = keras.layers.ReLU()(layer)
     #layer = MaxPooling1D(3)(layer)
-    layer = Conv1D(filters=(conv_num/4), kernel_size=kernel_size, activation='relu')(layer)
+    layer = Conv1D(filters=(conv_num/4), kernel_size=kernel_size)(layer)
+    layer = keras.layers.BatchNormalization()(layer)
+    layer = keras.layers.ReLU()(layer)
+    layer = Conv1D(filters=(conv_num/8), kernel_size=kernel_size)(layer)
+    layer = keras.layers.BatchNormalization()(layer)
+    layer = keras.layers.ReLU()(layer)
+
     #layer = Conv1D(filters=(conv_num/8), kernel_size=kernel_size, activation='relu')(layer)
     #layer = GlobalAveragePooling1D()(layer)
     layer = Dropout(do)(layer)
@@ -51,7 +62,7 @@ def create_model_conv(conv_num = 64,kernel_size=5, mask_value=-9999, do=0.5):
     outputs = layers.Dense(1, activation="sigmoid")(layer)
 
     model = keras.Model(inputs, outputs)
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001,) ,loss="binary_crossentropy",metrics=['AUC'])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001,) ,loss="binary_crossentropy",metrics=['AUC'])
     return model
 
 def create_model(lstm_size = 32, mask_value=-9999, num_lstm=1, do=0.5, model_interactions_lstm=False,add_att=True):
@@ -146,7 +157,7 @@ max_number_of_evaluation_groups=3
 
 missing_const = -9999
 
-for file_name in ['raw_reduced.csv']: # 'result_better_features.csv', 'result_old_exp.csv' 'result_old_exp2.csv','result_better_features.csv',
+for file_name in ['result_raw2.csv']: #raw_reduced.csv 'result_better_features.csv', 'result_old_exp.csv' 'result_old_exp2.csv','result_better_features.csv',
     #for eye in ['avg','r','l','both']: #
     for eye in ['avg']:  #for attention check
         data = pd.read_csv(os.path.join('data',file_name))
@@ -184,7 +195,7 @@ for file_name in ['raw_reduced.csv']: # 'result_better_features.csv', 'result_ol
 
                 #print('creating model')
                 model = create_model_conv(mask_value=missing_const)
-                #model = create_model(model_interactions_lstm=True,lstm_size=32,num_lstm=2,mask_value=missing_const)
+                #model = create_model(model_interactions_lstm=False,lstm_size=32,num_lstm=2,mask_value=missing_const)
                 #print('fitting model')
 
                 mon = 'val_auc'
